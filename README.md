@@ -17,7 +17,7 @@ This module aims to be the less intrusive as possible regarding the main project
 1. Add maven dependency :
  ```xml
 <dependency>
-    <groupId>com.github.kagkarlsson</groupId>
+    <groupId>com.github.piemjean</groupId>
     <artifactId>db-scheduler-mongo</artifactId>
     <version>master-SNAPSHOT</version>
 </dependency>

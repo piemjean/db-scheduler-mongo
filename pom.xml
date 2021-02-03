@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>db-scheduler-mongo</artifactId>
-  <groupId>com.github.kagkarlsson</groupId>
+  <groupId>com.github.piemjean</groupId>
   <version>9.3</version>
   <name>db-scheduler: Mongodb support</name>
   <description>Module providing Mongodb support for db-scheduler</description>
@@ -28,13 +28,11 @@
   </properties>
 
   <dependencies>
-    <!-- https://mvnrepository.com/artifact/com.github.kagkarlsson/db-scheduler -->
     <dependency>
       <groupId>com.github.kagkarlsson</groupId>
       <artifactId>db-scheduler</artifactId>
       <version>${db-scheduler.version}</version>
     </dependency>
-
 
     <dependency>
       <groupId>org.mongodb</groupId>
@@ -46,14 +44,12 @@
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-simple</artifactId>
-      <version>${slf4j-simple.version}</version>
       <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>de.flapdoodle.embed</groupId>
       <artifactId>de.flapdoodle.embed.mongo</artifactId>
-      <version>${embed-mongo.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -66,14 +62,12 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>${mockito-core.version}</version>
       <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
-      <version>${mockito-core.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -81,13 +75,11 @@
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <scope>test</scope>
-      <version>${assertj-version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>${guava.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -96,11 +88,40 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
+        <groupId>com.github.kagkarlsson</groupId>
+        <artifactId>db-scheduler-parent</artifactId>
+        <version>${db-scheduler.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
         <groupId>org.junit</groupId>
         <artifactId>junit-bom</artifactId>
         <version>${junit-jupiter.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>${slf4j-simple.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>de.flapdoodle.embed</groupId>
+        <artifactId>de.flapdoodle.embed.mongo</artifactId>
+        <version>${embed-mongo.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>${guava.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
