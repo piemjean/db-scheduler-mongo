@@ -19,7 +19,7 @@ This module aims to be the less intrusive as possible regarding the main project
 <dependency>
     <groupId>com.github.piemjean</groupId>
     <artifactId>db-scheduler-mongo</artifactId>
-    <version>master-SNAPSHOT</version>
+    <version>9.3</version>
 </dependency>
 ```
 
