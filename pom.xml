@@ -10,6 +10,7 @@
   <version>9.3</version>
   <name>db-scheduler: Mongodb support</name>
   <description>Module providing Mongodb support for db-scheduler</description>
+  <url>https://github.com/piemjean/db-scheduler-mongo</url>
 
   <properties>
     <jdk.version>1.8</jdk.version>
@@ -135,5 +136,28 @@
       </plugin>
     </plugins>
   </build>
+
+  <distributionManagement>
+    <!-- Publish versioned releases here -->
+    <repository>
+      <id>${nexus.server.projet.id}</id>
+      <name>Releases of ${project.artifactId}</name>
+      <url>${nexus.releases.repository}/</url>
+    </repository>
+
+    <!-- Publish snapshots here -->
+    <snapshotRepository>
+      <uniqueVersion>true</uniqueVersion>
+      <id>${nexus.server.projet.id}</id>
+      <name>Snapshots of ${project.artifactId}</name>
+      <url>${nexus.snapshots.repository}/</url>
+    </snapshotRepository>
+
+    <!-- Utilisé par Maven site:stage et site:deploy -->
+    <site>
+      <id>${nexus.server.projet.id}</id>
+      <url>${project.url}</url>
+    </site>
+  </distributionManagement>
 
 </project>
