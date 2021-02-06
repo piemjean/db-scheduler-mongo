@@ -12,6 +12,49 @@
   <description>Module providing Mongodb support for db-scheduler</description>
   <url>https://github.com/piemjean/db-scheduler-mongo</url>
 
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>piemjean</name>
+      <email>piem.jean@gmail.com</email>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/piemjean/db-scheduler-mopngo.git</connection>
+    <developerConnection>scm:git:ssh://github.com:piemjean/db-scheduler-mopngo.git</developerConnection>
+    <url>https://github.com/piemjean/db-scheduler-mongo/tree/master</url>
+  </scm>
+
+  <distributionManagement>
+    <!-- Publish versioned releases here -->
+    <repository>
+      <id>${nexus.server.projet.id}</id>
+      <name>Releases of ${project.artifactId}</name>
+      <url>${nexus.releases.repository}/</url>
+    </repository>
+
+    <!-- Publish snapshots here -->
+    <snapshotRepository>
+      <uniqueVersion>true</uniqueVersion>
+      <id>${nexus.server.projet.id}</id>
+      <name>Snapshots of ${project.artifactId}</name>
+      <url>${nexus.snapshots.repository}/</url>
+    </snapshotRepository>
+
+    <!-- Utilisé par Maven site:stage et site:deploy -->
+    <site>
+      <id>${nexus.server.projet.id}</id>
+      <url>${project.url}</url>
+    </site>
+  </distributionManagement>
+
   <properties>
     <jdk.version>1.8</jdk.version>
     <maven.compiler.source>${jdk.version}</maven.compiler.source>
@@ -131,33 +174,50 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.2.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>1.6</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
       </plugin>
     </plugins>
   </build>
-
-  <distributionManagement>
-    <!-- Publish versioned releases here -->
-    <repository>
-      <id>${nexus.server.projet.id}</id>
-      <name>Releases of ${project.artifactId}</name>
-      <url>${nexus.releases.repository}/</url>
-    </repository>
-
-    <!-- Publish snapshots here -->
-    <snapshotRepository>
-      <uniqueVersion>true</uniqueVersion>
-      <id>${nexus.server.projet.id}</id>
-      <name>Snapshots of ${project.artifactId}</name>
-      <url>${nexus.snapshots.repository}/</url>
-    </snapshotRepository>
-
-    <!-- Utilisé par Maven site:stage et site:deploy -->
-    <site>
-      <id>${nexus.server.projet.id}</id>
-      <url>${project.url}</url>
-    </site>
-  </distributionManagement>
 
 </project>
