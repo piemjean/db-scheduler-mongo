@@ -60,7 +60,7 @@
     <maven.compiler.source>${jdk.version}</maven.compiler.source>
     <maven.compiler.target>${jdk.version}</maven.compiler.target>
     <!--  Versions declaration  -->
-    <db-scheduler.version>9.4</db-scheduler.version>
+    <db-scheduler.version>10.0</db-scheduler.version>
     <mongo-java-driver.version>3.12.7</mongo-java-driver.version>
     <slf4j-simple.version>1.7.30</slf4j-simple.version>
     <embed-mongo.version>3.0.0</embed-mongo.version>

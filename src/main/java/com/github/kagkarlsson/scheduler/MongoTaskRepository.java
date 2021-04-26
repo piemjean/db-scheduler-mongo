@@ -90,7 +90,6 @@ public class MongoTaskRepository implements TaskRepository {
     public boolean createIfNotExists(Execution execution) {
         LOG.debug("Creation request for execution {}", execution);
         // Search criterion : taskName, taskInstance
-        final Bson query = buildFilterFromExecution(execution, false);
         Optional<TaskEntity> taskEntityOpt = toEntity(execution);
         if (!taskEntityOpt.isPresent()) {
             return false;
@@ -194,6 +193,11 @@ public class MongoTaskRepository implements TaskRepository {
 
         StreamSupport.stream(tasks.spliterator(), false).map(this::toExecution)
             .filter(Optional::isPresent).map(Optional::get).forEach(consumer);
+    }
+
+    @Override
+    public List<Execution> lockAndGetDue(Instant instant, int i) {
+        throw new UnsupportedOperationException("lockAndFetch not supported in mongodatabase");
     }
 
     @Override
@@ -353,6 +357,11 @@ public class MongoTaskRepository implements TaskRepository {
         final DeleteResult deleted = this.collection.deleteMany(filter);
 
         return Long.valueOf(deleted.getDeletedCount()).intValue();
+    }
+
+    @Override
+    public void checkSupportsLockAndFetch() {
+        throw new IllegalArgumentException("Mongodb does not support specific lock-and-fetch since operations are already atomic");
     }
 
     /**

@@ -40,10 +40,6 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
 
     @Override
     public Scheduler build() {
-        if (pollingLimit < executorThreads) {
-            LOG.warn("Polling-limit is less than number of threads. Should be equal or higher.");
-        }
-
         if (schedulerName == null) {
             schedulerName = new SchedulerName.Hostname();
         }
@@ -70,7 +66,7 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
             schedulerName.getName());
 
         return new MongoScheduler(clock, mongoTaskRepository, clientTaskRepository, taskResolver, executorThreads, candidateExecutorService,
-            schedulerName, waiter, heartbeatInterval, enableImmediateExecution, statsRegistry, pollingLimit,
+            schedulerName, waiter, heartbeatInterval, enableImmediateExecution, statsRegistry,
             deleteUnresolvedAfter, shutdownMaxWait, logLevel, logStackTrace, startTasks);
     }
 }

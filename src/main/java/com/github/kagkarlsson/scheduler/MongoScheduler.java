@@ -19,14 +19,15 @@ public class MongoScheduler extends Scheduler {
       ExecutorService executorService,
       SchedulerName schedulerName, Waiter executeDueWaiter, Duration heartbeatInterval,
       boolean enableImmediateExecution,
-      StatsRegistry statsRegistry, int pollingLimit,
+      StatsRegistry statsRegistry,
       Duration deleteUnresolvedAfter, Duration shutdownMaxWait, LogLevel logLevel,
       boolean logStackTrace,
       List<OnStartup> onStartup) {
     super(clock, schedulerTaskRepository, clientTaskRepository, taskResolver, threadpoolSize,
         executorService, schedulerName, executeDueWaiter, heartbeatInterval,
         enableImmediateExecution,
-        statsRegistry, pollingLimit, deleteUnresolvedAfter, shutdownMaxWait, logLevel,
+        statsRegistry, PollingStrategyConfig.DEFAULT_FETCH, deleteUnresolvedAfter, shutdownMaxWait,
+        logLevel,
         logStackTrace, onStartup);
   }
 
