@@ -7,7 +7,7 @@
 
   <artifactId>db-scheduler-mongo</artifactId>
   <groupId>com.github.piemjean</groupId>
-  <version>develop-SNAPSHOT</version>
+  <version>9.4.0-SNAPSHOT</version>
   <name>db-scheduler: Mongodb support</name>
   <description>Module providing Mongodb support for db-scheduler</description>
   <url>https://github.com/piemjean/db-scheduler-mongo</url>
@@ -60,7 +60,7 @@
     <maven.compiler.source>${jdk.version}</maven.compiler.source>
     <maven.compiler.target>${jdk.version}</maven.compiler.target>
     <!--  Versions declaration  -->
-    <db-scheduler.version>9.3</db-scheduler.version>
+    <db-scheduler.version>9.4</db-scheduler.version>
     <mongo-java-driver.version>3.12.7</mongo-java-driver.version>
     <slf4j-simple.version>1.7.30</slf4j-simple.version>
     <embed-mongo.version>3.0.0</embed-mongo.version>

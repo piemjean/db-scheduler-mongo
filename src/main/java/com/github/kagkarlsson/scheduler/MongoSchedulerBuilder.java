@@ -27,6 +27,7 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
      *
      * @param mongoClient - object handling mongo connection
      * @param databaseName - mongo database name
+     * @param collection - name of collection in which tasks are stored
      * @param knownTasks - list of known tasks
      */
     protected MongoSchedulerBuilder(MongoClient mongoClient, String databaseName, String collection,
@@ -70,6 +71,6 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
 
         return new MongoScheduler(clock, mongoTaskRepository, clientTaskRepository, taskResolver, executorThreads, candidateExecutorService,
             schedulerName, waiter, heartbeatInterval, enableImmediateExecution, statsRegistry, pollingLimit,
-            deleteUnresolvedAfter, shutdownMaxWait, startTasks);
+            deleteUnresolvedAfter, shutdownMaxWait, logLevel, logStackTrace, startTasks);
     }
 }
