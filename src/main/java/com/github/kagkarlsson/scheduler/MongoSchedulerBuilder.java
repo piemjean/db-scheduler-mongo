@@ -47,9 +47,9 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
         final TaskResolver taskResolver = new TaskResolver(statsRegistry, clock, knownTasks);
 
         final MongoTaskRepository mongoTaskRepository = new MongoTaskRepository(taskResolver,
-            schedulerName, serializer, databaseName, tableName, mongoClient);
+            schedulerName, serializer, databaseName, tableName, mongoClient, clock);
         final MongoTaskRepository clientTaskRepository = new MongoTaskRepository(taskResolver,
-            schedulerName, serializer, databaseName, tableName, mongoClient);
+            schedulerName, serializer, databaseName, tableName, mongoClient, clock);
 
         ExecutorService candidateExecutorService = executorService;
         if (candidateExecutorService == null) {
