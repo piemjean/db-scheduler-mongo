@@ -61,9 +61,9 @@
     <maven.compiler.target>${jdk.version}</maven.compiler.target>
     <!--  Versions declaration  -->
     <db-scheduler.version>11.0</db-scheduler.version>
-    <mongo-java-driver.version>3.12.10</mongo-java-driver.version>
+    <mongo-java-driver.version>4.5.1</mongo-java-driver.version>
     <slf4j-simple.version>1.7.30</slf4j-simple.version>
-    <embed-mongo.version>3.0.0</embed-mongo.version>
+    <embed-mongo.version>3.4.5</embed-mongo.version>
     <junit-jupiter.version>5.6.0</junit-jupiter.version>
     <mockito-core.version>3.7.7</mockito-core.version>
     <assertj-version>3.19.0</assertj-version>
@@ -81,7 +81,20 @@
 
     <dependency>
       <groupId>org.mongodb</groupId>
-      <artifactId>mongo-java-driver</artifactId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>${mongo-java-driver.version}</version>
+    </dependency>
+
+<!--    mongodb-driver-sync using not matching version for unknown reason-->
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-core</artifactId>
+      <version>${mongo-java-driver.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>bson</artifactId>
       <version>${mongo-java-driver.version}</version>
     </dependency>
 
@@ -160,6 +173,12 @@
         <artifactId>de.flapdoodle.embed.mongo</artifactId>
         <version>${embed-mongo.version}</version>
         <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>com.mongodb</groupId>
+            <artifactId>mongo-java-driver</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
