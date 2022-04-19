@@ -644,7 +644,7 @@ public class MongoTaskRepositoryTest {
             .collect(Collectors.toList());
 
         // Check exception
-        ErrorCategory category = ErrorCategory.fromErrorCode(exception.getCode());
+        ErrorCategory category = ErrorCategory.fromErrorCode(exception.getError().getCode());
         assertThat(category).isEqualTo(ErrorCategory.DUPLICATE_KEY);
 
         // Check that only one document was inserted

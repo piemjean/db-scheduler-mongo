@@ -5,8 +5,8 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 import com.github.kagkarlsson.scheduler.utils.TestUtils;
 import com.github.kagkarlsson.scheduler.utils.TestUtils.MongoTools;
-import com.mongodb.MongoClient;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import java.io.IOException;

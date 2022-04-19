@@ -4,7 +4,8 @@ import com.github.kagkarlsson.scheduler.logging.LogLevel;
 import com.github.kagkarlsson.scheduler.stats.StatsRegistry;
 import com.github.kagkarlsson.scheduler.task.OnStartup;
 import com.github.kagkarlsson.scheduler.task.Task;
-import com.mongodb.MongoClient;
+import com.mongodb.client.MongoClient;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,7 +40,7 @@ public class MongoScheduler extends Scheduler {
   }
 
   public static MongoSchedulerBuilder create(MongoClient mongoClient, String database,
-      String collection, List<Task<?>> knownTasks) {
+                                             String collection, List<Task<?>> knownTasks) {
     return new MongoSchedulerBuilder(mongoClient, database, collection, knownTasks);
   }
 }

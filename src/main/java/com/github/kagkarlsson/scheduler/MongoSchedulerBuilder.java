@@ -4,10 +4,11 @@ import static com.github.kagkarlsson.scheduler.ExecutorUtils.defaultThreadFactor
 import static com.github.kagkarlsson.scheduler.Scheduler.THREAD_PREFIX;
 
 import com.github.kagkarlsson.scheduler.task.Task;
-import com.mongodb.MongoClient;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import com.mongodb.client.MongoClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +32,7 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
      * @param knownTasks - list of known tasks
      */
     protected MongoSchedulerBuilder(MongoClient mongoClient, String databaseName, String collection,
-        List<Task<?>> knownTasks) {
+                                    List<Task<?>> knownTasks) {
         super(null, knownTasks);
         this.mongoClient = mongoClient;
         this.databaseName = databaseName;
