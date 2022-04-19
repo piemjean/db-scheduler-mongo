@@ -3,9 +3,9 @@ package com.github.kagkarlsson.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.kagkarlsson.scheduler.TaskResolver.UnresolvedTask;
-import com.github.kagkarlsson.scheduler.task.Execution;
-import com.github.kagkarlsson.scheduler.task.Task;
-import com.github.kagkarlsson.scheduler.task.TaskInstance;
+import com.github.kagkarlsson.scheduler.task.*;
+import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
+import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import com.github.kagkarlsson.scheduler.utils.ExecutionBuilder;
 import com.github.kagkarlsson.scheduler.utils.TestUtils;
 import com.mongodb.ErrorCategory;
@@ -62,15 +62,18 @@ public class MongoTaskRepositoryTest {
             .thenReturn(Optional.of(taskResolved));
 
         repository = new MongoTaskRepository(taskResolver, schedulerName, serializer,
-            "db-scheduler", "db-scheduler", emebddedMongodbExtension.getMongoClient());
+            "db-scheduler", "db-scheduler", emebddedMongodbExtension.getMongoClient(),
+                new SystemClock());
     }
 
     @Test
     void testCreateIfNotExistsOk() {
-        Execution execution = new ExecutionBuilder().taskName("idTask").taskInstanceId("idInstance")
-            .build();
+        OneTimeTask<Object> task = Tasks
+                .oneTime("idTask", Object.class).execute((TaskInstance<Object> inst,
+                                                        ExecutionContext ctx) -> {
+                });
 
-        boolean created = repository.createIfNotExists(execution);
+        boolean created = repository.createIfNotExists(task.schedulableInstance("idInstance"));
 
         assertThat(created).isTrue();
 
@@ -94,8 +97,10 @@ public class MongoTaskRepositoryTest {
 
     @Test
     void testCreateIfNotExistsKo() {
-        Execution execution = new ExecutionBuilder().taskName("idTask").taskInstanceId("idInstance")
-            .build();
+        OneTimeTask<Object> task = Tasks
+                .oneTime("idTask", Object.class).execute((TaskInstance<Object> inst,
+                                                          ExecutionContext ctx) -> {
+                });
 
         TaskEntity taskEntityInitial = new TaskEntity();
         taskEntityInitial.setTaskInstance("idInstance");
@@ -103,7 +108,7 @@ public class MongoTaskRepositoryTest {
 
         this.emebddedMongodbExtension.getCollection().insertOne(taskEntityInitial);
 
-        boolean created = repository.createIfNotExists(execution);
+        boolean created = repository.createIfNotExists(task.schedulableInstance("idInstance"));
         // Check that no execution is created because it already exists
         assertThat(created).isFalse();
     }
@@ -639,7 +644,7 @@ public class MongoTaskRepositoryTest {
             .collect(Collectors.toList());
 
         // Check exception
-        ErrorCategory category = ErrorCategory.fromErrorCode(exception.getCode());
+        ErrorCategory category = ErrorCategory.fromErrorCode(exception.getError().getCode());
         assertThat(category).isEqualTo(ErrorCategory.DUPLICATE_KEY);
 
         // Check that only one document was inserted

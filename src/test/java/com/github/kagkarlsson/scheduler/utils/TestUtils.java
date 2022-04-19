@@ -1,6 +1,9 @@
 package com.github.kagkarlsson.scheduler.utils;
 
-import com.mongodb.MongoClient;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.ServerAddress;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
 import de.flapdoodle.embed.mongo.MongodExecutable;
 import de.flapdoodle.embed.mongo.MongodProcess;
 import de.flapdoodle.embed.mongo.MongodStarter;
@@ -9,13 +12,10 @@ import de.flapdoodle.embed.mongo.config.Net;
 import de.flapdoodle.embed.mongo.distribution.Version;
 import de.flapdoodle.embed.process.runtime.Network;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Arrays;
+import java.util.Collections;
 
 public class TestUtils {
 
@@ -61,7 +61,10 @@ public class TestUtils {
         MongodExecutable mongodExecutable = starter.prepare(mongodConfig);
         MongodProcess mongod = mongodExecutable.start();
 
-        MongoClient mongoClient = new MongoClient("localhost", port);
+        MongoClient mongoClient = MongoClients.create(MongoClientSettings.builder()
+                .applyToClusterSettings(b -> b.hosts(Collections.singletonList(
+                        new ServerAddress("localhost", port)
+                ))).build());
 
         MongoTools mongoTools = new MongoTools();
         mongoTools.setClient(mongoClient);
