@@ -4,10 +4,11 @@ import static com.github.kagkarlsson.scheduler.ExecutorUtils.defaultThreadFactor
 import static com.github.kagkarlsson.scheduler.Scheduler.THREAD_PREFIX;
 
 import com.github.kagkarlsson.scheduler.task.Task;
-import com.mongodb.MongoClient;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import com.mongodb.client.MongoClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +18,7 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
     private final MongoClient mongoClient;
 
     private final String databaseName;
+    private boolean registerShutdownHook;
 
     /**
      * Scheduler builder for mongo database
@@ -37,11 +39,16 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
         this.tableName = collection;
     }
 
+    public MongoSchedulerBuilder registerShutdownHook() {
+        this.registerShutdownHook = true;
+        return this;
+    }
+
     @Override
     public Scheduler build() {
-        if (pollingLimit < executorThreads) {
-            LOG.warn("Polling-limit is less than number of threads. Should be equal or higher.");
-        }
+//        if (pollingLimit < executorThreads) {
+//            LOG.warn("Polling-limit is less than number of threads. Should be equal or higher.");
+//        }
 
         if (schedulerName == null) {
             schedulerName = new SchedulerName.Hostname();
@@ -50,9 +57,9 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
         final TaskResolver taskResolver = new TaskResolver(statsRegistry, clock, knownTasks);
 
         final MongoTaskRepository mongoTaskRepository = new MongoTaskRepository(taskResolver,
-            schedulerName, serializer, databaseName, tableName, mongoClient);
+            schedulerName, serializer, databaseName, tableName, mongoClient, clock);
         final MongoTaskRepository clientTaskRepository = new MongoTaskRepository(taskResolver,
-            schedulerName, serializer, databaseName, tableName, mongoClient);
+            schedulerName, serializer, databaseName, tableName, mongoClient, clock);
 
         ExecutorService candidateExecutorService = executorService;
         if (candidateExecutorService == null) {
@@ -68,8 +75,13 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
             tableName,
             schedulerName.getName());
 
-        return new MongoScheduler(clock, mongoTaskRepository, clientTaskRepository, taskResolver, executorThreads, candidateExecutorService,
-            schedulerName, waiter, heartbeatInterval, enableImmediateExecution, statsRegistry, pollingLimit,
-            deleteUnresolvedAfter, shutdownMaxWait, startTasks);
+        Scheduler scheduler = new MongoScheduler(this.clock, mongoTaskRepository, clientTaskRepository, taskResolver, this.executorThreads, candidateExecutorService, this.schedulerName, this.waiter, this.heartbeatInterval, this.enableImmediateExecution, this.statsRegistry, this.pollingStrategyConfig, this.deleteUnresolvedAfter, this.shutdownMaxWait, this.logLevel, this.logStackTrace, this.startTasks);
+        if (this.registerShutdownHook) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                LOG.info("Received shutdown signal.");
+                scheduler.stop();
+            }));
+        }
+        return scheduler;
     }
 }

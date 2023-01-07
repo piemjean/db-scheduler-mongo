@@ -1,29 +1,30 @@
 package com.github.kagkarlsson.scheduler.utils;
 
-import com.mongodb.MongoClient;
-import de.flapdoodle.embed.mongo.MongodExecutable;
-import de.flapdoodle.embed.mongo.MongodProcess;
-import de.flapdoodle.embed.mongo.MongodStarter;
-import de.flapdoodle.embed.mongo.config.MongodConfig;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
 import de.flapdoodle.embed.mongo.config.Net;
 import de.flapdoodle.embed.mongo.distribution.Version;
+import de.flapdoodle.embed.mongo.transitions.Mongod;
+import de.flapdoodle.embed.mongo.transitions.RunningMongodProcess;
 import de.flapdoodle.embed.process.runtime.Network;
+import de.flapdoodle.reverse.Transition;
+import de.flapdoodle.reverse.TransitionWalker;
+import de.flapdoodle.reverse.transitions.Start;
+
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.UnknownHostException;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class TestUtils {
+
 
     public static class MongoTools {
 
         MongoClient client;
-        MongodExecutable mongodExecutable;
-        MongodProcess mongodProcess;
+        RunningMongodProcess mongodProcess;
 
         public MongoClient getClient() {
             return client;
@@ -33,45 +34,50 @@ public class TestUtils {
             this.client = client;
         }
 
-        public MongodExecutable getMongodExecutable() {
-            return mongodExecutable;
-        }
 
-        public void setMongodExecutable(MongodExecutable mongodExecutable) {
-            this.mongodExecutable = mongodExecutable;
-        }
-
-        public MongodProcess getMongodProcess() {
+        public RunningMongodProcess getMongodProcess() {
             return mongodProcess;
         }
 
-        public void setMongodProcess(MongodProcess mongodProcess) {
+        public void setMongodProcess(RunningMongodProcess mongodProcess) {
             this.mongodProcess = mongodProcess;
         }
     }
 
     public static MongoTools startEmbeddedMongo() throws IOException {
-        MongodStarter starter = MongodStarter.getDefaultInstance();
+        int freeServerPort = 27017;
+        Mongod mongod = new Mongod() {
+            @Override
+            public Transition<Net> net() {
+                return Start.to(Net.class).providedBy(() -> {
+                    try {
+                        boolean localhostIsIPv6 = Network.localhostIsIPv6();
+                        return Net.builder().port(freeServerPort).isIpv6(localhostIsIPv6).build();
+                    } catch (UnknownHostException e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+                });
+            }
+        };
 
-        int port = Network.getFreeServerPort();
-        MongodConfig mongodConfig = MongodConfig.builder()
-            .version(Version.Main.PRODUCTION)
-            .net(new Net(port, Network.localhostIsIPv6()))
-            .build();
-        MongodExecutable mongodExecutable = starter.prepare(mongodConfig);
-        MongodProcess mongod = mongodExecutable.start();
+        TransitionWalker.ReachedState<RunningMongodProcess> running = mongod.start(Version.Main.V6_0);
 
-        MongoClient mongoClient = new MongoClient("localhost", port);
+        MongoClient mongo = MongoClients
+                .create(connectionString(running.current().getServerAddress().toString()));
 
         MongoTools mongoTools = new MongoTools();
-        mongoTools.setClient(mongoClient);
-        mongoTools.setMongodExecutable(mongodExecutable);
-        mongoTools.setMongodProcess(mongod);
+        mongoTools.setClient(mongo);
+        mongoTools.setMongodProcess(running.current());
 
         return mongoTools;
     }
 
     public static Instant truncateInstant(Instant instant) {
         return instant.truncatedTo(ChronoUnit.MILLIS);
+    }
+
+    private static String connectionString(String url){
+        return "mongodb://" + url;
     }
 }

@@ -32,9 +32,7 @@ public class MongoDbSimpleTaskMain {
 
         // Simple Task
         OneTimeTask<SampleTaskData> oneTimeTask = Tasks.oneTime("one-time", SampleTaskData.class)
-            .execute((TaskInstance<SampleTaskData> inst, ExecutionContext ctx) -> {
-                LOG.info("Trigger of execution {}, with data {}", ctx.getExecution(), inst);
-            });
+            .execute((TaskInstance<SampleTaskData> inst, ExecutionContext ctx) -> LOG.info("Trigger of execution {}, with data {}", ctx.getExecution(), inst));
 
         // Instantiation of mongodb based scheduler
         List<Task<?>> knownTasks = new ArrayList<>();
@@ -43,7 +41,8 @@ public class MongoDbSimpleTaskMain {
 
         SchedulerBuilder builder = MongoScheduler
             .create(mongoTools.getClient(), "scheduler-database", "scheduler-collection",
-                knownTasks).pollingInterval(Duration.ofSeconds(5));
+                knownTasks)
+                .pollingInterval(Duration.ofSeconds(5));
         Scheduler scheduler = builder.build();
         // Start scheduler
         scheduler.start();
@@ -59,7 +58,6 @@ public class MongoDbSimpleTaskMain {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOG.info("Received shutdown signal.");
             scheduler.stop();
-            mongoTools.getMongodExecutable().stop();
             mongoTools.getMongodProcess().stop();
         }));
 
