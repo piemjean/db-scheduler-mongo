@@ -1,5 +1,8 @@
 package com.github.kagkarlsson.scheduler.utils;
 
+import com.github.kagkarlsson.scheduler.TaskEntity;
+import com.github.kagkarlsson.scheduler.task.Execution;
+import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
@@ -14,9 +17,12 @@ import de.flapdoodle.reverse.TransitionWalker;
 import de.flapdoodle.reverse.transitions.Start;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 public class TestUtils {
 
@@ -45,7 +51,9 @@ public class TestUtils {
     }
 
     public static MongoTools startEmbeddedMongo() throws IOException {
-        int freeServerPort = 27017;
+        InetAddress localHost = Network.getLocalHost();
+        int freeServerPort = Network.freeServerPort(localHost);
+
         Mongod mongod = new Mongod() {
             @Override
             public Transition<Net> net() {
@@ -76,6 +84,30 @@ public class TestUtils {
     public static Instant truncateInstant(Instant instant) {
         return instant.truncatedTo(ChronoUnit.MILLIS);
     }
+
+    public static TaskEntity toEntity(Execution in) {
+
+        TaskEntity out = new TaskEntity();
+        Optional<TaskInstance<?>> taskInstanceOpt = Optional
+                .ofNullable(in.taskInstance);
+        taskInstanceOpt.map(TaskInstance::getTaskName).ifPresent(out::setTaskName);
+        taskInstanceOpt.map(TaskInstance::getId).ifPresent(out::setTaskInstance);
+        taskInstanceOpt
+                .map(TaskInstance::getData)
+                .map((data) -> data.toString().getBytes(StandardCharsets.UTF_8))
+                .ifPresent(out::setTaskData);
+
+        out.setExecutionTime(in.getExecutionTime());
+        out.setPicked(in.isPicked());
+        out.setPickedBy(in.pickedBy);
+        out.setLastFailure(in.lastFailure);
+        out.setLastSuccess(in.lastSuccess);
+        out.setLastHeartbeat(in.lastHeartbeat);
+        out.setVersion(in.version);
+
+        return out;
+    }
+
 
     private static String connectionString(String url){
         return "mongodb://" + url;

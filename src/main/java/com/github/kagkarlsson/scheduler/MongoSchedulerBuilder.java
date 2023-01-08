@@ -39,6 +39,21 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
         this.tableName = collection;
     }
 
+    /**
+     * Scheduler builder for mongo database
+     *
+     * Example using the database 'scheduler-database' and the collection 'scheduler-collection' :
+     * SchedulerBuilder builder = new MongoSchedulerBuilder(mongoTools.getClient(), knownTasks).tableName("scheduler-collection")
+     *
+     * @param mongoClient - object handling mongo connection
+     * @param knownTasks - list of known tasks
+     */
+    protected MongoSchedulerBuilder(MongoClient mongoClient, String databaseName, List<Task<?>> knownTasks) {
+        super(null, knownTasks);
+        this.databaseName = databaseName;
+        this.mongoClient = mongoClient;
+    }
+
     public MongoSchedulerBuilder registerShutdownHook() {
         this.registerShutdownHook = true;
         return this;
@@ -46,10 +61,6 @@ public class MongoSchedulerBuilder extends SchedulerBuilder {
 
     @Override
     public Scheduler build() {
-//        if (pollingLimit < executorThreads) {
-//            LOG.warn("Polling-limit is less than number of threads. Should be equal or higher.");
-//        }
-
         if (schedulerName == null) {
             schedulerName = new SchedulerName.Hostname();
         }

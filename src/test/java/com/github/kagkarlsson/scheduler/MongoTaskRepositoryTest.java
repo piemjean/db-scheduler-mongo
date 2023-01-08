@@ -2,6 +2,7 @@ package com.github.kagkarlsson.scheduler;
 
 import static java.time.temporal.ChronoUnit.MILLIS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.kagkarlsson.scheduler.TaskResolver.UnresolvedTask;
 import com.github.kagkarlsson.scheduler.serializer.Serializer;
@@ -9,6 +10,7 @@ import com.github.kagkarlsson.scheduler.task.*;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 import com.github.kagkarlsson.scheduler.testhelper.SettableClock;
 import com.github.kagkarlsson.scheduler.utils.ExecutionBuilder;
+import com.github.kagkarlsson.scheduler.utils.TestTasks;
 import com.github.kagkarlsson.scheduler.utils.TestUtils;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoBulkWriteException;
@@ -59,24 +61,14 @@ public class MongoTaskRepositoryTest {
         Mockito.lenient().when(taskResolved.getDataClass()).thenReturn(SimpleData.class);
         Mockito.lenient().when(taskResolver.resolve(Mockito.anyString()))
             .thenReturn(Optional.of(taskResolved));
-        oneTimeTask = MongoTaskRepositoryTest.oneTime("idTask", Void.class, (e, b) -> {});
+        oneTimeTask = TestTasks.oneTime("oneTime", Void.class, TestTasks.DO_NOTHING);
 
         repository = new MongoTaskRepository(taskResolver, schedulerName, serializer,
             "db-scheduler", "db-scheduler", emebddedMongodbExtension.getMongoClient(), new SettableClock());
     }
 
-    public static <T> OneTimeTask<T> oneTime(String name, Class<T> dataClass, VoidExecutionHandler<T> handler) {
-        return new OneTimeTask<T>(name, dataClass) {
-            @Override
-            public void executeOnce(TaskInstance<T> taskInstance, ExecutionContext executionContext) {
-                handler.execute(taskInstance, executionContext);
-            }
-        };
-    }
-
     @Test
     void testCreateIfNotExistsOk() {
-
         TaskInstance<Void> task = oneTimeTask.instance("id1");
         SchedulableTaskInstance instance = new SchedulableTaskInstance<>(task, Instant.now().truncatedTo(MILLIS));
 
@@ -116,6 +108,72 @@ public class MongoTaskRepositoryTest {
         boolean created = repository.createIfNotExists(instance);
         // Check that no execution is created because it already exists
         assertThat(created).isFalse();
+    }
+
+    @Test
+    void testReplaceIfExistOk() {
+        String taskName = "taskName";
+        String taskId = "taskId";
+        String pickedBy = "testScheduler";
+        long version = 10L;
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        Instant newExecutionTime = Instant.now().plus(1, ChronoUnit.MINUTES).truncatedTo(MILLIS);
+
+        SchedulableTaskInstance newInstance = new SchedulableTaskInstance<>(task, newExecutionTime);
+
+        Execution toBeReplaced = new ExecutionBuilder()
+                .taskName(taskName)
+                .taskInstanceId(taskId)
+                .version(version)
+                .picked(false)
+                .pickedBy(pickedBy)
+                .executionTime(Instant.now().plus(2, ChronoUnit.MINUTES))
+                .build();
+
+        TaskEntity toBeReplacedEntity = TestUtils.toEntity(toBeReplaced);
+        emebddedMongodbExtension.getCollection().insertOne(toBeReplacedEntity);
+
+        Instant exTime = repository.replace(toBeReplaced, newInstance);
+
+        Optional<Execution> actual = repository.getExecution(task.getTaskName(), task.getId());
+        Execution ex = actual.get();
+
+        assertThat(ex.taskInstance.getTaskName()).isEqualTo(task.getTaskName());
+        assertThat(ex.taskInstance.getId()).isEqualTo(task.getId());
+        assertThat(ex.picked).isFalse();
+        assertThat(ex.pickedBy).isNull();
+        assertThat(ex.lastFailure).isNull();
+        assertThat(ex.lastSuccess).isNull();
+        assertThat(ex.lastHeartbeat).isNull();
+        assertThat(ex.consecutiveFailures).isEqualTo(0);
+        assertThat(ex.version).isEqualTo(1);
+        assertThat(ex.executionTime).isEqualTo(newExecutionTime);
+        assertThat(exTime).isEqualTo(newExecutionTime);
+    }
+
+    @Test
+    void testReplaceIfNotExistOk() {
+        String taskName = "taskName";
+        String taskId = "taskId";
+        String pickedBy = "testScheduler";
+        long version = 10L;
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        Instant newExecutionTime = Instant.now().plus(1, ChronoUnit.MINUTES).truncatedTo(MILLIS);
+
+        SchedulableTaskInstance newInstance = new SchedulableTaskInstance<>(task, newExecutionTime);
+
+        Execution toBeReplaced = new ExecutionBuilder()
+                .taskName(taskName)
+                .taskInstanceId(taskId)
+                .version(version)
+                .picked(false)
+                .pickedBy(pickedBy)
+                .executionTime(Instant.now().plus(2, ChronoUnit.MINUTES))
+                .build();
+
+        assertThatThrownBy(() -> repository.replace(toBeReplaced, newInstance))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Failed to replace execution, found none matching " + toBeReplaced);
     }
 
     @Test

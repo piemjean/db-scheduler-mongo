@@ -6,6 +6,7 @@ import com.github.kagkarlsson.scheduler.task.OnStartup;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.mongodb.client.MongoClient;
 
+import javax.sql.DataSource;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,10 +22,17 @@ public class MongoScheduler extends Scheduler {
             statsRegistry, pollingStrategyConfig, deleteUnresolvedAfter, shutdownMaxWait, logLevel, logStackTrace, onStartup);
     }
 
+    public static SchedulerBuilder create(MongoClient mongoClient, String database, Task<?> ... knownTasks) {
+        return create(mongoClient, database, Arrays.asList(knownTasks));
+    }
+
     public static MongoSchedulerBuilder create(MongoClient mongoClient, String database,
                                                String collection, Task<?>... knownTasks) {
-        List<Task<?>> knownTasksList = new ArrayList<>(Arrays.asList(knownTasks));
-        return create(mongoClient, database, collection, knownTasksList);
+        return create(mongoClient, database, collection, Arrays.asList(knownTasks));
+    }
+
+    public static MongoSchedulerBuilder create(MongoClient mongoClient, String database, List<Task<?>> knownTasks) {
+        return new MongoSchedulerBuilder(mongoClient, database, knownTasks);
     }
 
     public static MongoSchedulerBuilder create(MongoClient mongoClient, String database,
