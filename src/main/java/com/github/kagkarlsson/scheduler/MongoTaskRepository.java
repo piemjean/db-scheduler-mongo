@@ -92,17 +92,23 @@ public class MongoTaskRepository implements TaskRepository {
     }
 
     @Override
-    public boolean createIfNotExists(SchedulableInstance execution) {
-        LOG.debug("Creation request for execution {}", execution);
-        Instant newExecutionTime = execution.getNextExecutionTime(clock.now());
-        Execution newExecution = new Execution(newExecutionTime, execution.getTaskInstance());
+    public boolean createIfNotExists(SchedulableInstance schedulableInstance) {
+        LOG.debug("Creation request for execution {}", schedulableInstance);
+        Optional<Execution> execution = this.getExecution(schedulableInstance.getTaskName(), schedulableInstance.getId());
+        if (execution.isPresent()) {
+            LOG.debug("Execution not created, it already exists. Due: {}", execution.get().executionTime);
+            return false;
+        }
 
-        Optional<TaskEntity> taskEntityOpt = toEntity(newExecution);
+        Optional<TaskEntity> taskEntityOpt = toEntity(schedulableInstance);
         if (!taskEntityOpt.isPresent()) {
             return false;
         }
 
         TaskEntity taskEntity = taskEntityOpt.get();
+        taskEntity.setPicked(false);
+        taskEntity.setVersion(1L);
+
         boolean created = false;
         try {
             this.collection.insertOne(taskEntity);
@@ -421,26 +427,21 @@ public class MongoTaskRepository implements TaskRepository {
      * @param in - SchedulableInstance to map
      * @return TaskEntity mapped from SchedulableInstance
      */
-    private Optional<TaskEntity> toEntity(Execution in) {
+    private Optional<TaskEntity> toEntity(SchedulableInstance<?> in) {
         if(in == null){
             return Optional.empty();
         }
 
         TaskEntity out = new TaskEntity();
-        Optional<TaskInstance<?>> taskInstanceOpt = Optional
-                .ofNullable(in.taskInstance);
+        Optional<TaskInstance<?>> taskInstanceOpt = Optional.ofNullable(in.getTaskInstance());
         taskInstanceOpt.map(TaskInstance::getTaskName).ifPresent(out::setTaskName);
         taskInstanceOpt.map(TaskInstance::getId).ifPresent(out::setTaskInstance);
         taskInstanceOpt.map(TaskInstance::getData).map(serializer::serialize)
                 .ifPresent(out::setTaskData);
 
-        out.setExecutionTime(in.getExecutionTime());
-        out.setPicked(in.isPicked());
-        out.setPickedBy(in.pickedBy);
-        out.setLastFailure(in.lastFailure);
-        out.setLastSuccess(in.lastSuccess);
-        out.setLastHeartbeat(in.lastHeartbeat);
-        out.setVersion(in.version);
+        out.setExecutionTime(in.getNextExecutionTime(clock.now()));
+        out.setPicked(false);
+        out.setVersion(1);
 
         return Optional.of(out);
     }
