@@ -17,14 +17,14 @@
     <maven.compiler.source>${jdk.version}</maven.compiler.source>
     <maven.compiler.target>${jdk.version}</maven.compiler.target>
     <!--  Versions declaration  -->
-    <db-scheduler.version>9.3</db-scheduler.version>
-    <mongo-java-driver.version>3.12.7</mongo-java-driver.version>
-    <slf4j-simple.version>1.7.30</slf4j-simple.version>
-    <embed-mongo.version>3.0.0</embed-mongo.version>
-    <junit-jupiter.version>5.6.0</junit-jupiter.version>
-    <mockito-core.version>3.7.7</mockito-core.version>
-    <assertj-version>3.19.0</assertj-version>
-    <guava.version>30.1-jre</guava.version>
+    <db-scheduler.version>11.6</db-scheduler.version>
+    <mongodb-driver.version>4.8.1</mongodb-driver.version>
+    <slf4j.version>2.17.1</slf4j.version>
+    <embed-mongo.version>4.3.3</embed-mongo.version>
+    <junit-jupiter.version>5.9.1</junit-jupiter.version>
+    <mockito-core.version>4.11.0</mockito-core.version>
+    <assertj-version>3.24.0</assertj-version>
+    <guava.version>31.1-jre</guava.version>
     <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
   </properties>
 
@@ -37,16 +37,28 @@
 
     <dependency>
       <groupId>org.mongodb</groupId>
-      <artifactId>mongo-java-driver</artifactId>
-      <version>${mongo-java-driver.version}</version>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>${mongodb-driver.version}</version>
     </dependency>
 
-    <!--  Tests dependencies  -->
     <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-simple</artifactId>
-      <scope>test</scope>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-core</artifactId>
+      <version>${mongodb-driver.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>bson</artifactId>
+      <version>${mongodb-driver.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+
 
     <dependency>
       <groupId>de.flapdoodle.embed</groupId>
@@ -105,10 +117,9 @@
       </dependency>
 
       <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-simple</artifactId>
-        <version>${slf4j-simple.version}</version>
-        <scope>test</scope>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>log4j-slf4j-impl</artifactId>
+          <version>${slf4j.version}</version>
       </dependency>
 
       <dependency>

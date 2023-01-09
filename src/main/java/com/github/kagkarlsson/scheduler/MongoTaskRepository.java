@@ -16,14 +16,17 @@ import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 import com.github.kagkarlsson.scheduler.TaskResolver.UnresolvedTask;
+import com.github.kagkarlsson.scheduler.exceptions.TaskInstanceException;
+import com.github.kagkarlsson.scheduler.serializer.Serializer;
 import com.github.kagkarlsson.scheduler.task.Execution;
+import com.github.kagkarlsson.scheduler.task.SchedulableInstance;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.mongodb.ErrorCategory;
-import com.mongodb.MongoClient;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
@@ -53,15 +56,17 @@ public class MongoTaskRepository implements TaskRepository {
     private final TaskResolver taskResolver;
     private final SchedulerName schedulerSchedulerName;
     private final Serializer serializer;
+    private final Clock clock;
 
     private final MongoCollection<TaskEntity> collection;
 
     public MongoTaskRepository(TaskResolver taskResolver,
-        SchedulerName schedulerSchedulerName,
-        Serializer serializer, String databaseName, String tableName, MongoClient mongoClient) {
+                               SchedulerName schedulerSchedulerName,
+                               Serializer serializer, String databaseName, String collectionName, MongoClient mongoClient, Clock clock) {
         this.taskResolver = taskResolver;
         this.schedulerSchedulerName = schedulerSchedulerName;
         this.serializer = serializer;
+        this.clock = clock;
 
         CodecRegistry pojoCodecRegistry = fromRegistries(
             MongoClientSettings.getDefaultCodecRegistry(),
@@ -70,7 +75,7 @@ public class MongoTaskRepository implements TaskRepository {
         MongoDatabase db = mongoClient.getDatabase(databaseName)
             .withCodecRegistry(pojoCodecRegistry);
 
-        this.collection = db.getCollection(tableName, TaskEntity.class);
+        this.collection = db.getCollection(collectionName, TaskEntity.class);
 
         // Create unique index for (taskName, taskInstance)
         uniqueIndexCreation();
@@ -87,14 +92,19 @@ public class MongoTaskRepository implements TaskRepository {
     }
 
     @Override
-    public boolean createIfNotExists(Execution execution) {
-        LOG.debug("Creation request for execution {}", execution);
-        // Search criterion : taskName, taskInstance
-        final Bson query = buildFilterFromExecution(execution, false);
-        Optional<TaskEntity> taskEntityOpt = toEntity(execution);
+    public boolean createIfNotExists(SchedulableInstance schedulableInstance) {
+        LOG.debug("Creation request for execution {}", schedulableInstance);
+        Optional<Execution> execution = this.getExecution(schedulableInstance.getTaskName(), schedulableInstance.getId());
+        if (execution.isPresent()) {
+            LOG.debug("Execution not created, it already exists. Due: {}", execution.get().executionTime);
+            return false;
+        }
+
+        Optional<TaskEntity> taskEntityOpt = toEntity(schedulableInstance);
         if (!taskEntityOpt.isPresent()) {
             return false;
         }
+
         TaskEntity taskEntity = taskEntityOpt.get();
         taskEntity.setPicked(false);
         taskEntity.setVersion(1L);
@@ -132,6 +142,54 @@ public class MongoTaskRepository implements TaskRepository {
         return StreamSupport.stream(tasks.spliterator(), false).map(this::toExecution)
             .filter(Optional::isPresent).map(Optional::get)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Instead of doing delete+insert, we allow updating an existing execution will all new fields
+     * @return the execution-time of the new execution
+     */
+
+    @Override
+    public Instant replace(Execution toBeReplaced, SchedulableInstance newInstance) {
+
+        Instant newExecutionTime = newInstance.getNextExecutionTime(clock.now());
+        Execution newExecution = new Execution(newExecutionTime, newInstance.getTaskInstance());
+        Object newData = newInstance.getTaskInstance().getData();
+
+        final Bson query = buildFilterFromExecution(toBeReplaced);
+
+        final FindOneAndUpdateOptions options = new FindOneAndUpdateOptions();
+        options.returnDocument(ReturnDocument.AFTER);
+        options.upsert(false);
+
+        Bson update = combine(
+                set(Fields.taskName, newExecution.taskInstance.getTaskName()),
+                set(Fields.taskInstance, newExecution.taskInstance.getId()),
+                set(Fields.picked, false),
+                set(Fields.pickedBy, null),
+                set(Fields.lastHeartbeat, null),
+                set(Fields.lastSuccess, null),
+                set(Fields.lastFailure, null),
+                set(Fields.consecutiveFailures, 0),
+                set(Fields.executionTime, newExecutionTime),
+                set(Fields.taskData, serializer.serialize(newData)),
+                set(Fields.version, 1));
+
+        try {
+            TaskEntity updatedDoc = this.collection.findOneAndUpdate(query, update, options);
+
+            if(updatedDoc == null){
+                throw new IllegalStateException("Failed to replace execution, found none matching " + toBeReplaced);
+            }
+        } catch (MongoWriteException e) {
+            LOG.error("Error while updating {} in database", toBeReplaced, e);
+            // Exception is chained only if it is not related to a duplicate key error
+            if (!ErrorCategory.fromErrorCode(e.getCode()).equals(ErrorCategory.DUPLICATE_KEY)) {
+                throw e;
+            }
+        }
+
+        return newExecutionTime;
     }
 
     @Override
@@ -197,9 +255,13 @@ public class MongoTaskRepository implements TaskRepository {
     }
 
     @Override
+    public List<Execution> lockAndGetDue(Instant instant, int i) {
+        throw new UnsupportedOperationException("lockAndFetch not supported for MongoDB");
+    }
+
+    @Override
     public void remove(Execution execution) {
         final Bson filter = buildFilterFromExecution(execution);
-
         this.collection.deleteOne(filter);
     }
 
@@ -264,12 +326,20 @@ public class MongoTaskRepository implements TaskRepository {
         final FindOneAndUpdateOptions options = new FindOneAndUpdateOptions();
         options.upsert(false);
 
-        Bson update = combine(set(Fields.executionTime, nextExecutionTime),
-            set(Fields.taskData, serializer.serialize(data)),
-            set(Fields.lastSuccess, lastSuccess), set(Fields.lastFailure, lastFailure),
+        Bson update = combine(
+            set(Fields.executionTime, nextExecutionTime),
+            set(Fields.lastSuccess, Optional.ofNullable(lastSuccess).orElse(null)),
+            set(Fields.lastFailure, Optional.ofNullable(lastFailure).orElse(null)),
             set(Fields.consecutiveFailures, consecutiveFailures),
-            inc(Fields.version, 1));
+            set(Fields.picked, false),
+            set(Fields.pickedBy, null),
+            set(Fields.lastHeartbeat, null),
+            inc(Fields.version, 1)
+        );
 
+        if(data != null){
+            update = combine(update, set(Fields.taskData, serializer.serialize(data)));
+        }
         final TaskEntity document = this.collection
             .findOneAndUpdate(buildFilterFromExecution(execution), update, options);
 
@@ -342,7 +412,6 @@ public class MongoTaskRepository implements TaskRepository {
     @Override
     public Optional<Execution> getExecution(String taskName, String taskInstanceId) {
         final Bson filters = buildFilterFromParams(taskName, taskInstanceId, null, false);
-
         return toExecution(this.collection.find(filters).first());
     }
 
@@ -355,35 +424,36 @@ public class MongoTaskRepository implements TaskRepository {
         return Long.valueOf(deleted.getDeletedCount()).intValue();
     }
 
+    @Override
+    public void checkSupportsLockAndFetch() {
+        throw new IllegalArgumentException("MongoDB does not support lock-and-fetch polling (i.e. Select-for-update)");
+    }
+
     /**
      * Mapping method to get an Entity from an Execution
      *
-     * @param in - Execution to map
-     * @return TaskEntity mapped from execution
+     * @param in - SchedulableInstance to map
+     * @return TaskEntity mapped from SchedulableInstance
      */
-    private Optional<TaskEntity> toEntity(Execution in) {
-        if (in == null) {
+    private Optional<TaskEntity> toEntity(SchedulableInstance<?> in) {
+        if(in == null){
             return Optional.empty();
         }
 
         TaskEntity out = new TaskEntity();
-        Optional<TaskInstance<?>> taskInstanceOpt = Optional
-            .ofNullable(in.taskInstance);
+        Optional<TaskInstance<?>> taskInstanceOpt = Optional.ofNullable(in.getTaskInstance());
         taskInstanceOpt.map(TaskInstance::getTaskName).ifPresent(out::setTaskName);
         taskInstanceOpt.map(TaskInstance::getId).ifPresent(out::setTaskInstance);
         taskInstanceOpt.map(TaskInstance::getData).map(serializer::serialize)
-            .ifPresent(out::setTaskData);
+                .ifPresent(out::setTaskData);
 
-        out.setExecutionTime(in.getExecutionTime());
-        out.setPicked(in.isPicked());
-        out.setPickedBy(in.pickedBy);
-        out.setLastFailure(in.lastFailure);
-        out.setLastSuccess(in.lastSuccess);
-        out.setLastHeartbeat(in.lastHeartbeat);
-        out.setVersion(in.version);
+        out.setExecutionTime(in.getNextExecutionTime(clock.now()));
+        out.setPicked(false);
+        out.setVersion(1);
 
         return Optional.of(out);
     }
+
 
     /**
      * Mapping method to get an Execution from a TaskEntity

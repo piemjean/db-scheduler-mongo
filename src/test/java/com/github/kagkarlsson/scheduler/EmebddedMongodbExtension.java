@@ -5,8 +5,8 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 import com.github.kagkarlsson.scheduler.utils.TestUtils;
 import com.github.kagkarlsson.scheduler.utils.TestUtils.MongoTools;
-import com.mongodb.MongoClient;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import java.io.IOException;
@@ -52,19 +52,18 @@ public class EmebddedMongodbExtension implements AfterEachCallback, AfterAllCall
 
     private MongoCollection<TaskEntity> getCollection(MongoDatabase db,
         String collectionName) {
-        MongoCollection<TaskEntity> collection = db
+        return db
             .getCollection(collectionName, TaskEntity.class);
-        return collection;
     }
 
     @Override
-    public void afterEach(ExtensionContext extensionContext) throws Exception {
+    public void afterEach(ExtensionContext extensionContext) {
         LOG.info("Delete collection");
         this.collection.deleteMany(new Document());
     }
 
     @Override
-    public void afterAll(ExtensionContext extensionContext) throws Exception {
+    public void afterAll(ExtensionContext extensionContext) {
         LOG.info("Kill embedded mongo");
         this.mongoTools.getMongodProcess().stop();
     }

@@ -1,12 +1,16 @@
 package com.github.kagkarlsson.scheduler;
 
+import static java.time.temporal.ChronoUnit.MILLIS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.kagkarlsson.scheduler.TaskResolver.UnresolvedTask;
-import com.github.kagkarlsson.scheduler.task.Execution;
-import com.github.kagkarlsson.scheduler.task.Task;
-import com.github.kagkarlsson.scheduler.task.TaskInstance;
+import com.github.kagkarlsson.scheduler.serializer.Serializer;
+import com.github.kagkarlsson.scheduler.task.*;
+import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
+import com.github.kagkarlsson.scheduler.testhelper.SettableClock;
 import com.github.kagkarlsson.scheduler.utils.ExecutionBuilder;
+import com.github.kagkarlsson.scheduler.utils.TestTasks;
 import com.github.kagkarlsson.scheduler.utils.TestUtils;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoBulkWriteException;
@@ -19,12 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Spliterator;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Assertions;
@@ -50,31 +49,34 @@ public class MongoTaskRepositoryTest {
 
     private MongoTaskRepository repository;
 
+    private OneTimeTask<Void> oneTimeTask;
+
     @RegisterExtension
     protected static EmebddedMongodbExtension emebddedMongodbExtension = new EmebddedMongodbExtension();
 
     @BeforeEach
-    void init() throws IOException {
+    void init() {
         // Mock task resolver
         Task taskResolved = Mockito.mock(Task.class);
         Mockito.lenient().when(taskResolved.getDataClass()).thenReturn(SimpleData.class);
         Mockito.lenient().when(taskResolver.resolve(Mockito.anyString()))
             .thenReturn(Optional.of(taskResolved));
+        oneTimeTask = TestTasks.oneTime("oneTime", Void.class, TestTasks.DO_NOTHING);
 
         repository = new MongoTaskRepository(taskResolver, schedulerName, serializer,
-            "db-scheduler", "db-scheduler", emebddedMongodbExtension.getMongoClient());
+            "db-scheduler", "db-scheduler", emebddedMongodbExtension.getMongoClient(), new SettableClock());
     }
 
     @Test
     void testCreateIfNotExistsOk() {
-        Execution execution = new ExecutionBuilder().taskName("idTask").taskInstanceId("idInstance")
-            .build();
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        SchedulableTaskInstance instance = new SchedulableTaskInstance<>(task, Instant.now().truncatedTo(MILLIS));
 
-        boolean created = repository.createIfNotExists(execution);
+        boolean created = repository.createIfNotExists(instance);
 
         assertThat(created).isTrue();
 
-        MongoDatabase db = this.emebddedMongodbExtension.getDb();
+        MongoDatabase db = emebddedMongodbExtension.getDb();
 
         MongoIterable<String> collections = db.listCollectionNames();
 
@@ -83,29 +85,95 @@ public class MongoTaskRepositoryTest {
         assertThat(collectionName).isEqualTo("db-scheduler");
 
         // Check presence in collection
-        MongoCollection<TaskEntity> collection = this.emebddedMongodbExtension.getCollection();
+        MongoCollection<TaskEntity> collection = emebddedMongodbExtension.getCollection();
 
         TaskEntity taskEntity = collection.find().first();
 
         assertThat(taskEntity).isNotNull();
-        assertThat(taskEntity.getTaskName()).isEqualTo("idTask");
-        assertThat(taskEntity.getTaskInstance()).isEqualTo("idInstance");
+        assertThat(taskEntity.getTaskName()).isEqualTo(task.getTaskName());
+        assertThat(taskEntity.getTaskInstance()).isEqualTo(task.getId());
     }
 
     @Test
-    void testCreateIfNotExistsKo() {
-        Execution execution = new ExecutionBuilder().taskName("idTask").taskInstanceId("idInstance")
-            .build();
+    void testCreateIfExistsOk() {
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        SchedulableTaskInstance instance = new SchedulableTaskInstance<>(task, Instant.now().truncatedTo(MILLIS));
 
         TaskEntity taskEntityInitial = new TaskEntity();
-        taskEntityInitial.setTaskInstance("idInstance");
-        taskEntityInitial.setTaskName("idTask");
+        taskEntityInitial.setTaskInstance(task.getId());
+        taskEntityInitial.setTaskName(task.getTaskName());
 
-        this.emebddedMongodbExtension.getCollection().insertOne(taskEntityInitial);
+        emebddedMongodbExtension.getCollection().insertOne(taskEntityInitial);
 
-        boolean created = repository.createIfNotExists(execution);
+        boolean created = repository.createIfNotExists(instance);
         // Check that no execution is created because it already exists
         assertThat(created).isFalse();
+    }
+
+    @Test
+    void testReplaceIfExistOk() {
+        String taskName = "taskName";
+        String taskId = "taskId";
+        String pickedBy = "testScheduler";
+        long version = 10L;
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        Instant newExecutionTime = Instant.now().plus(1, ChronoUnit.MINUTES).truncatedTo(MILLIS);
+
+        SchedulableTaskInstance newInstance = new SchedulableTaskInstance<>(task, newExecutionTime);
+
+        Execution toBeReplaced = new ExecutionBuilder()
+                .taskName(taskName)
+                .taskInstanceId(taskId)
+                .version(version)
+                .picked(false)
+                .pickedBy(pickedBy)
+                .executionTime(Instant.now().plus(2, ChronoUnit.MINUTES))
+                .build();
+
+        TaskEntity toBeReplacedEntity = TestUtils.toEntity(toBeReplaced);
+        emebddedMongodbExtension.getCollection().insertOne(toBeReplacedEntity);
+
+        Instant exTime = repository.replace(toBeReplaced, newInstance);
+
+        Optional<Execution> actual = repository.getExecution(task.getTaskName(), task.getId());
+        Execution ex = actual.get();
+
+        assertThat(ex.taskInstance.getTaskName()).isEqualTo(task.getTaskName());
+        assertThat(ex.taskInstance.getId()).isEqualTo(task.getId());
+        assertThat(ex.picked).isFalse();
+        assertThat(ex.pickedBy).isNull();
+        assertThat(ex.lastFailure).isNull();
+        assertThat(ex.lastSuccess).isNull();
+        assertThat(ex.lastHeartbeat).isNull();
+        assertThat(ex.consecutiveFailures).isEqualTo(0);
+        assertThat(ex.version).isEqualTo(1);
+        assertThat(ex.executionTime).isEqualTo(newExecutionTime);
+        assertThat(exTime).isEqualTo(newExecutionTime);
+    }
+
+    @Test
+    void testReplaceIfNotExistOk() {
+        String taskName = "taskName";
+        String taskId = "taskId";
+        String pickedBy = "testScheduler";
+        long version = 10L;
+        TaskInstance<Void> task = oneTimeTask.instance("id1");
+        Instant newExecutionTime = Instant.now().plus(1, ChronoUnit.MINUTES).truncatedTo(MILLIS);
+
+        SchedulableTaskInstance newInstance = new SchedulableTaskInstance<>(task, newExecutionTime);
+
+        Execution toBeReplaced = new ExecutionBuilder()
+                .taskName(taskName)
+                .taskInstanceId(taskId)
+                .version(version)
+                .picked(false)
+                .pickedBy(pickedBy)
+                .executionTime(Instant.now().plus(2, ChronoUnit.MINUTES))
+                .build();
+
+        assertThatThrownBy(() -> repository.replace(toBeReplaced, newInstance))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Failed to replace execution, found none matching " + toBeReplaced);
     }
 
     @Test
@@ -117,7 +185,7 @@ public class MongoTaskRepositoryTest {
         UnresolvedTask unresolvedTask = Mockito.mock(UnresolvedTask.class);
         Mockito.when(unresolvedTask.getTaskName()).thenReturn("unresolved");
 
-        Mockito.when(taskResolver.getUnresolved()).thenReturn(Arrays.asList(unresolvedTask));
+        Mockito.when(taskResolver.getUnresolved()).thenReturn(Collections.singletonList(unresolvedTask));
 
         // Insert test data in mongo
         // | Task name  | Task instance | picked | execution time | Should be selected |
@@ -143,7 +211,7 @@ public class MongoTaskRepositoryTest {
 
         // Insert 4 executions, 3 of them are not picked, 2 of those are in the past
         // 1 of them is picked and in the past
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         // ACT
         List<Execution> executions = repository.getDue(Instant.now(), 10);
@@ -182,7 +250,7 @@ public class MongoTaskRepositoryTest {
                     .executionTime(Instant.now().plus(2, ChronoUnit.MINUTES))
                     .build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         ScheduledExecutionsFilter filter = ScheduledExecutionsFilter.all().withPicked(false);
         List<Execution> executions = new ArrayList<>();
@@ -202,7 +270,7 @@ public class MongoTaskRepositoryTest {
     }
 
     @Test
-    void testScheduledExecutionsWithPicekd() {
+    void testScheduledExecutionsWithPicked() {
         // Insert test data in mongo
         // | Task name | Task instance | picked | execution time | Should be selected |
         // |-----------|---------------|--------|----------------|--------------------|
@@ -221,7 +289,7 @@ public class MongoTaskRepositoryTest {
                     .executionTime(Instant.now().minus(15, ChronoUnit.MINUTES))
                     .build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         ScheduledExecutionsFilter filter = ScheduledExecutionsFilter.all().withPicked(true);
         List<Execution> executions = new ArrayList<>();
@@ -265,7 +333,7 @@ public class MongoTaskRepositoryTest {
                     .executionTime(Instant.now().minus(15, ChronoUnit.MINUTES))
                     .build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
         // Build method parameter for call
         ScheduledExecutionsFilter filter = ScheduledExecutionsFilter.all().withPicked(false);
         List<Execution> executions = new ArrayList<>();
@@ -304,7 +372,7 @@ public class MongoTaskRepositoryTest {
                     .executionTime(Instant.now().minus(15, ChronoUnit.MINUTES))
                     .build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
         // Build method parameter for call
         ScheduledExecutionsFilter filter = ScheduledExecutionsFilter.all().withPicked(true);
         List<Execution> executions = new ArrayList<>();
@@ -335,7 +403,7 @@ public class MongoTaskRepositoryTest {
         List<TaskEntity> entities = Arrays
             .asList(builder.version(0L).picked(false).taskInstance("instance-1").build(),
                 builder.version(1).picked(true).taskInstance("instance-2").build());
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         // Parameter construction
         Execution execution = new ExecutionBuilder().taskName("task-1").taskInstanceId("instance-2")
@@ -345,7 +413,7 @@ public class MongoTaskRepositoryTest {
 
         List<TaskEntity> tasks = StreamSupport
             .stream(Spliterators.spliteratorUnknownSize(
-                this.emebddedMongodbExtension.getCollection().find().iterator(),
+                emebddedMongodbExtension.getCollection().find().iterator(),
                 Spliterator.ORDERED), false).collect(Collectors.toList());
 
         assertThat(tasks).isNotEmpty();
@@ -360,7 +428,7 @@ public class MongoTaskRepositoryTest {
             .taskInstance("taskInstance")
             .executionTime(Instant.now()).consecutiveFailures(3).version(12)
             .build();
-        this.emebddedMongodbExtension.getCollection().insertOne(task);
+        emebddedMongodbExtension.getCollection().insertOne(task);
 
         // Build method parameter
         SimpleData dataContent = new SimpleData("content");
@@ -383,7 +451,7 @@ public class MongoTaskRepositoryTest {
         assertThat(updated).isTrue();
 
         // Retrieve actual object in database
-        TaskEntity actual = this.emebddedMongodbExtension.getCollection().find().first();
+        TaskEntity actual = emebddedMongodbExtension.getCollection().find().first();
         // Test if task is correctly updated with parameters
         assertThat(actual).isNotEqualTo(task);
         assertThat(actual.getVersion()).isEqualTo(execution.version + 1);
@@ -402,7 +470,7 @@ public class MongoTaskRepositoryTest {
             .taskInstance("taskInstance")
             .executionTime(Instant.now()).consecutiveFailures(3).version(12)
             .build();
-        this.emebddedMongodbExtension.getCollection().insertOne(task);
+        emebddedMongodbExtension.getCollection().insertOne(task);
 
         // Build method parameter
         Execution execution = new ExecutionBuilder().taskName("name-1").version(12)
@@ -443,7 +511,7 @@ public class MongoTaskRepositoryTest {
         TaskEntity task = TaskEntityBuilder.aTaskEntity().taskName("name-1")
             .taskInstance("taskInstance").executionTime(Instant.now())
             .picked(false).version(version).taskData("test".getBytes()).build();
-        this.emebddedMongodbExtension.getCollection().insertOne(task);
+        emebddedMongodbExtension.getCollection().insertOne(task);
 
         // Build method parameter
         Execution execution = new ExecutionBuilder().taskName("name-1").version(version)
@@ -509,7 +577,7 @@ public class MongoTaskRepositoryTest {
                     .lastHeartbeat(Instant.now().minus(1, ChronoUnit.HOURS))
                     .build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         // Act
         Instant olderThan = Instant.now().minus(30, ChronoUnit.MINUTES);
@@ -522,14 +590,14 @@ public class MongoTaskRepositoryTest {
 
     @Test
     void testUpdateHeartbeat() {
-        // Build entity to insert in databse
+        // Build entity to insert in database
         Instant initialHeartBeat = Instant.now()
             .minus(1, ChronoUnit.HOURS);
         TaskEntity task = TaskEntityBuilder.aTaskEntity().taskName("task-1")
             .taskInstance("instance-1").version(12)
             .lastHeartbeat(initialHeartBeat).build();
 
-        this.emebddedMongodbExtension.getCollection().insertOne(task);
+        emebddedMongodbExtension.getCollection().insertOne(task);
 
         // Build arguments
         Execution execution = new ExecutionBuilder().taskName("task-1").taskInstanceId("instance-1")
@@ -538,7 +606,7 @@ public class MongoTaskRepositoryTest {
 
         repository.updateHeartbeat(execution, newHeartbeat);
 
-        TaskEntity actual = this.emebddedMongodbExtension.getCollection().find().first();
+        TaskEntity actual = emebddedMongodbExtension.getCollection().find().first();
         assertThat(actual).isNotEqualTo(task);
         assertThat(actual.getLastHeartbeat()).isEqualTo(TestUtils.truncateInstant(newHeartbeat));
     }
@@ -565,7 +633,7 @@ public class MongoTaskRepositoryTest {
                 .lastSuccess(Instant.now().minus(1, ChronoUnit.HOURS))
                 .lastFailure(null).build());
 
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         // Build argument
         Duration interval = Duration.ofMinutes(30);
@@ -582,7 +650,7 @@ public class MongoTaskRepositoryTest {
         TaskEntity entity = TaskEntityBuilder.aTaskEntity().taskName("task-1")
             .taskInstance("instance-1").build();
 
-        this.emebddedMongodbExtension.getCollection().insertOne(entity);
+        emebddedMongodbExtension.getCollection().insertOne(entity);
 
         // Call method
         Optional<Execution> actual = repository.getExecution("task-1", "instance-1");
@@ -605,7 +673,7 @@ public class MongoTaskRepositoryTest {
         List<TaskEntity> entities = Arrays.asList(builder.taskInstance("instance-1").build(),
             builder.taskInstance("instance-2").build(), builder.taskInstance("instance-3").build(),
             builder.taskName("task-2").taskInstance("instance-1").build());
-        this.emebddedMongodbExtension.getCollection().insertMany(entities);
+        emebddedMongodbExtension.getCollection().insertMany(entities);
 
         // Call method
         int deletedCount = repository.removeExecutions("task-1");
@@ -613,7 +681,7 @@ public class MongoTaskRepositoryTest {
         assertThat(deletedCount).isEqualTo(3);
 
         List<TaskEntity> actual = StreamSupport
-            .stream(this.emebddedMongodbExtension.getCollection().find().spliterator(), false)
+            .stream(emebddedMongodbExtension.getCollection().find().spliterator(), false)
             .collect(Collectors.toList());
 
         assertThat(actual).hasSize(1);
@@ -628,14 +696,14 @@ public class MongoTaskRepositoryTest {
         List<TaskEntity> entities = Arrays.asList(builder.build(), builder.build());
         MongoBulkWriteException bulkException = Assertions
             .assertThrows(MongoBulkWriteException.class,
-                () -> this.emebddedMongodbExtension.getCollection().insertMany(entities));
+                () -> emebddedMongodbExtension.getCollection().insertMany(entities));
 
         MongoWriteException exception = Assertions
             .assertThrows(MongoWriteException.class,
-                () -> this.emebddedMongodbExtension.getCollection().insertOne(builder.build()));
+                () -> emebddedMongodbExtension.getCollection().insertOne(builder.build()));
 
         List<TaskEntity> actualEntities = StreamSupport
-            .stream(this.emebddedMongodbExtension.getCollection().find().spliterator(), false)
+            .stream(emebddedMongodbExtension.getCollection().find().spliterator(), false)
             .collect(Collectors.toList());
 
         // Check exception

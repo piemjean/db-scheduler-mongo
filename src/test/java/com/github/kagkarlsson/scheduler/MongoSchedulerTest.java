@@ -23,7 +23,7 @@ public class MongoSchedulerTest {
     @Test
     void schedulerOneTimeTest() {
         SchedulerBuilder builder = MongoScheduler
-            .create(mongo.getMongoClient(), "database", "collection");
+            .create(mongo.getMongoClient(), "db-scheduler-mongo");
 
         AtomicInteger count = new AtomicInteger();
 
