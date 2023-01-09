@@ -52,7 +52,7 @@ public class TestUtils {
 
     public static MongoTools startEmbeddedMongo() throws IOException {
         InetAddress localHost = Network.getLocalHost();
-        int freeServerPort = Network.freeServerPort(localHost);
+        int freeServerPort = 27017;//Network.freeServerPort(localHost);
 
         Mongod mongod = new Mongod() {
             @Override

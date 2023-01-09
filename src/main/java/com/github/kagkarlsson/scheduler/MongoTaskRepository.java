@@ -326,12 +326,20 @@ public class MongoTaskRepository implements TaskRepository {
         final FindOneAndUpdateOptions options = new FindOneAndUpdateOptions();
         options.upsert(false);
 
-        Bson update = combine(set(Fields.executionTime, nextExecutionTime),
-            set(Fields.taskData, serializer.serialize(data)),
-            set(Fields.lastSuccess, lastSuccess), set(Fields.lastFailure, lastFailure),
+        Bson update = combine(
+            set(Fields.executionTime, nextExecutionTime),
+            set(Fields.lastSuccess, Optional.ofNullable(lastSuccess).orElse(null)),
+            set(Fields.lastFailure, Optional.ofNullable(lastFailure).orElse(null)),
             set(Fields.consecutiveFailures, consecutiveFailures),
-            inc(Fields.version, 1));
+            set(Fields.picked, false),
+            set(Fields.pickedBy, null),
+            set(Fields.lastHeartbeat, null),
+            inc(Fields.version, 1)
+        );
 
+        if(data != null){
+            update = combine(update, set(Fields.taskData, serializer.serialize(data)));
+        }
         final TaskEntity document = this.collection
             .findOneAndUpdate(buildFilterFromExecution(execution), update, options);
 

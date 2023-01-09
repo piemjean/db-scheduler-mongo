@@ -270,7 +270,7 @@ public class MongoTaskRepositoryTest {
     }
 
     @Test
-    void testScheduledExecutionsWithPicekd() {
+    void testScheduledExecutionsWithPicked() {
         // Insert test data in mongo
         // | Task name | Task instance | picked | execution time | Should be selected |
         // |-----------|---------------|--------|----------------|--------------------|
@@ -590,7 +590,7 @@ public class MongoTaskRepositoryTest {
 
     @Test
     void testUpdateHeartbeat() {
-        // Build entity to insert in databse
+        // Build entity to insert in database
         Instant initialHeartBeat = Instant.now()
             .minus(1, ChronoUnit.HOURS);
         TaskEntity task = TaskEntityBuilder.aTaskEntity().taskName("task-1")
